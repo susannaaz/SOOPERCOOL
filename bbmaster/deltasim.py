@@ -7,7 +7,7 @@ import sys
 
 class DeltaBbl(object):
     def __init__(self, nside, dsim, filt, bins, lmin=2, lmax=None, pol=False, 
-                 nsim_per_ell=10, seed0=1000, n_iter=0):
+                 nsim_per_ell=10, interp_ells=None, seed0=1000, n_iter=0):
         if not isinstance(dsim, dict):
             raise TypeError("For now delta simulators can only be "
                             "specified through a dictionary.")
@@ -32,6 +32,7 @@ class DeltaBbl(object):
         self.n_bins = self.bins.get_n_bands()
         self.n_ells = lmax-lmin+1
         self.nsim_per_ell = nsim_per_ell
+        self.interp_ells = interp_ells
         self.seed0 = seed0
         self.n_iter = n_iter
         self.pol = pol
@@ -227,12 +228,45 @@ class DeltaBbl(object):
         return np.arange(self.lmin, self.lmax+1)
 
     def gen_Bbl_all(self):
+        if self.interp_ells:
+            ipl = self.interp_ells
+            ls_sampled = []
+            il_sampled = []
+            for il, l in enumerate(self.get_ells()):
+                if il%ipl == 0:
+                    ls_sampled.append(l)
+                    il_sampled.append(il)
+            ls_sampled = np.array(ls_sampled)
+            il_sampled = np.array(il_sampled)
+        else:
+            ls_sampled = self.get_ells()
+            il_sampled = np.arange(len(ls_sampled))
+        bpw_sampled = np.array([self.gen_Bbl_at_ell(l) for l in ls_sampled])
+        
         if self.pol:
             # arr_out has shape pol_out, bpw_out, pol_in, ell_in
             arr_out = np.zeros((4,self.n_bins,4,self.n_ells))
-            for il in range(self.n_ells):
-                arr_out[:,:,:,il] = self.gen_Bbl_at_ell(self.lmin+il)
+            for idx, ils in enumerate(il_sampled):
+                arr_out[:,:,:,ils] = bpw_sampled[idx]   
+            if self.interp_ells:
+                for il, l in enumerate(self.get_ells()):
+                    if l not in ls_sampled:
+                        for ip in range(4):
+                            for ib in range(self.n_bins):
+                                for iq in range(4):
+                                    #print('iq', iq, 'ib', ib, 'ip', ip, 'il', il)
+                                    arr_out[iq,ib,ip,il] = np.interp(
+                                        l, ls_sampled, 
+                                        bpw_sampled[:,iq,ib,ip]
+                                    )
         else: 
-            arr_out = np.array([self.gen_Bbl_at_ell(l)
-                         for l in self.get_ells()]).T
+            arr_out = np.zeros((self.n_bins, self.n_ells))
+            for idx, ils in enumerate(il_sampled):
+                arr_out[:,ils] = bpw_sampled[idx,:]
+            if self.interp_ells:
+                for il, l in enumerate(self.get_ells()):
+                    if l not in ls_sampled:
+                        for ib in range(self.n_bins):
+                            arr_out[ib,il] = np.interp(l, ls_sampled,
+                                                       bpw_sampled[:,ib])
         return arr_out
