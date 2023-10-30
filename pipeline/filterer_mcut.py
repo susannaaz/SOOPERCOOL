@@ -49,7 +49,7 @@ if __name__ == '__main__':
     msk = hp.read_map(man.fname_binary_mask)
     for fin, fout in zip(file_input_list, file_output_list):
         # Read maps
-        mpQ, mpU = hp.read_map(fin, field=[0, 1])
+        mpQ, mpU = hp.read_map(fin, field=[1,2]) # this is because now maps have to be TQU
         # Filter
         mpQf, mpUf = filter_map(man, mpQ, mpU, msk, o.m_cut)
         # Write output

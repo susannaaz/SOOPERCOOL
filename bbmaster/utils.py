@@ -6,8 +6,7 @@ import pymaster as nmt
 import healpy as hp
 import sacc
 
-
-def get_pcls(man, fnames, names, fname_out, mask, binning, winv=None):
+def get_pcls(man, fnames, names, fname_out, mask, binning, beam_fwhm=None, winv=None, filtered_with_toast=False):
     """
     man -> pipeline manager
     fnames -> files with input maps
@@ -16,6 +15,7 @@ def get_pcls(man, fnames, names, fname_out, mask, binning, winv=None):
     mask -> mask
     binning -> binning scheme to use
     winv -> inverse binned MCM (optional)
+    filtered_with_toast -> if True, then we should look for our map file in fnames.replace('.fits','/')+'filterbin_filtered_map.fits', following the convention of toast for outputting maps. Also we need to correct for the PWF if filtered with toast (since maps are made from timestream in a pixelized sky)
     """
 
     if winv is not None:
@@ -24,12 +24,20 @@ def get_pcls(man, fnames, names, fname_out, mask, binning, winv=None):
             raise ValueError("Incompatible binning scheme and "
                              "binned MCM.")
         winv = winv.reshape([4*nbpw, 4*nbpw])
+    if beam_fwhm is not None:
+        beam = hp.gauss_beam(np.radians(beam_fwhm), lmax=3*man.nside-1, pol=True)
+    pwf = hp.pixwin(man.nside, pol=True, lmax=3*man.nside-1)
 
     # Read maps
     fields = []
     for fname in fnames:
-        mpQ, mpU = hp.read_map(fname, field=[0, 1])
-        f = nmt.NmtField(mask, [mpQ, mpU])
+        if filtered_with_toast:
+            mpQ, mpU = hp.read_map(fname.replace('.fits','/')+'filterbin_filtered_map.fits', field=[1, 2]) # now maps must be TQU, so we load 1,2
+            f = nmt.NmtField(mask, [mpQ, mpU], beam=beam[:,0]*pwf[0])
+        else:
+            mpQ, mpU = hp.read_map(fname, field=[1, 2])
+            f = nmt.NmtField(mask, [mpQ, mpU], beam=beam[:,0])
+        #f = nmt.NmtField(mask, [mpQ, mpU],)
         fields.append(f)
     nmaps = len(fields)
 
@@ -55,7 +63,6 @@ def get_pcls(man, fnames, names, fname_out, mask, binning, winv=None):
             s.add_ell_cl('cl_be', names[i], names[j], leff, cls[icl][2])
         s.add_ell_cl('cl_bb', names[i], names[j], leff, cls[icl][3])
     s.save_fits(fname_out, overwrite=True)
-
 
 def beam_gaussian(ll, fwhm_amin):
     """

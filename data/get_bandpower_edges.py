@@ -1,6 +1,6 @@
 import numpy as np
 
-nside = 64
+nside = 256
 lmax = 3*nside-1
 delta_ell = 10
 bpw_edges = delta_ell*np.arange((lmax+1)//delta_ell+1)
