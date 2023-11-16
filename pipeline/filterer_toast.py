@@ -27,7 +27,7 @@ def make_schedule(sched_par, sched_patches):
     command = f'toast_ground_schedule @{sched_par} @{sched_patches} --debug'
     run_bash_command(command)
 
-def filter_map(inputmap_fl, nside_out=nside, telescope='SAT1', sample_rate = 32., sched_path='data/schedules/schedule_sat_1day.txt'):
+def filter_map(inputmap_fl, nside_out=nside, sample_rate = 32., sched_path='data/schedules/schedule_sat_1day.txt', add_noise=False):
     """
     TODO: define input map file
     TODO: read nside from yaml
@@ -36,13 +36,14 @@ def filter_map(inputmap_fl, nside_out=nside, telescope='SAT1', sample_rate = 32.
     # Initialize schedule
     schedule = toast.schedule.GroundSchedule()
     if not os.path.exists(sched_path):
+        # TODO change to: if sched_path==None
         # Make schedule
         make_schedule('data/schedules/schedule_sat.par', 'data/schedules/patches_sat.txt')
     # Read schedule
     schedule.read(sched_path)
     # Setup focal plane
     focalplane = sotoast.SOFocalplane(hwfile=None,
-                                      telescope=telescope,
+                                      telescope=schedule.telescope_name,
                                       sample_rate=sample_rate * u.Hz,
                                       bands='SAT_f090',
                                       wafer_slots='w25', 
@@ -50,20 +51,23 @@ def filter_map(inputmap_fl, nside_out=nside, telescope='SAT1', sample_rate = 32.
                                       thinfp=None,
                                       comm=None)
     # Setup telescope
-    telescope = toast.Telescope(name=telescope, 
+    telescope = toast.Telescope(name=schedule.telescope_name,
                                 focalplane=focalplane, 
                                 site=toast.GroundSite("Atacama", schedule.site_lat,
                                                       schedule.site_lon, schedule.site_alt))
     # Create data object
     data = toast.Data()
 
-    # Apply baseline filters
-    _, sim_gnd = apply_scanning(data, telescope, schedule)
+    # Apply filters
+    _, sim_gnd = apply_scanning(data, telescope, schedule) # HWP info in here, + all sim_ground stuff
     data, det_pointing_radec = apply_det_pointing_radec(data, sim_gnd)
     data, det_pointing_azel = apply_det_pointing_azel(data, sim_gnd)
     data, pixels_radec = apply_pixels_radec(data, det_pointing_radec, nside_out)
     data, weights_radec = apply_weights_radec(data, det_pointing_radec)
-
+    if add_noise:
+        _, noise_model = apply_noise_model(data)
+        data, sim_noise = apply_sim_noise(data)
+    
     # Input map
     IQUmap = hp.read_map(inputmap_fl, field=[0,1,2])
 

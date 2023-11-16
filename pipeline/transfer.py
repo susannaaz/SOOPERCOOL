@@ -31,7 +31,7 @@ if __name__ == '__main__':
     cls_filt = []
     for n, pin, pfilt in zip(sim_names, pcl_in_names, pcl_filt_names):
         nE, nB = n
-        print(nE, nB, pin, pfilt)
+        #print(nE, nB, pin, pfilt)
         order = [(nE, nE, 'cl_ee'),
                  (nE, nE, 'cl_eb'),
                  (nE, nE, 'cl_eb'),
@@ -132,7 +132,9 @@ if __name__ == '__main__':
              transfer_function=trans,
              transfer_function_error=etrans,
              bpw_windows=bpw_windows,
-             wcal_inv=wcal_inv)
+             wcal_inv=wcal_inv,
+             input_cl = cl_in, # Added SA 
+             filtered_cl = cl_filt) # Added SA 
 
     if o.plot:
         # Reliable ells

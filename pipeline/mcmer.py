@@ -31,6 +31,8 @@ def mcmer(o):
                        axes=[1, 0, 3, 2])
 
     # Save to file
+    print(o.output_dir)
+    os.system(f'mkdir -p {o.output_dir}/mcm') #Added SA
     fname_out = man.get_filename('mcm', o.output_dir)
     print(f"Saving to {fname_out}")
     np.savez(fname_out, mcm=mcm)
@@ -42,9 +44,13 @@ def mcmer(o):
         plt.figure()
         plt.imshow(mcm.reshape([nspec*nl, nspec*nl]))
         plt.colorbar()
-        fname = os.path.join(man.get_filenam("mcm_plots", o.output_dir),
+        fname = os.path.join(man.get_filename("mcm_plots", o.output_dir), #correct SA
                              'mcm.pdf')
+        fname_png = os.path.join(man.get_filename("mcm_plots", o.output_dir), #correct SA
+                             'mcm.png')
+        print(fname_png)
         plt.savefig(fname, bbox_inches='tight')
+        plt.savefig(fname_png, bbox_inches='tight')
 
 
 if __name__ == '__main__':
