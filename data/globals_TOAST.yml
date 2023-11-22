@@ -1,0 +1,24 @@
+# Resolution parameter
+nside: 64
+# Apodised mask
+mask: /pscratch/sd/s/susannaz/BBFLP/outputs_5hrs/output_maps_res0.00035rad/mask_apo15.0.fits
+# Binary mask
+binary_mask: /pscratch/sd/s/susannaz/BBFLP/outputs_5hrs/output_maps_res0.00035rad/mask_binary_ns512.fits
+# List with power law sim names
+pl_sims: data/plsims.txt
+# Directory storing the PL sims
+pl_sims_dir: data/PL
+# Input PL power spectrum
+cl_PL: data/PL/cl_PL.npz
+# List with validation sim names
+val_sims: data/valsims.txt
+# Directory storing the validation sims
+val_sims_dir: data/val
+# Input validation power spectrum
+cl_val: data/val/cl_val.npz
+# Bandpower edges
+bpw_edges: data/bpw_edges.npz
+# SAT schedule param file
+schedule_par_file: data/schedules/schedule_sat.par
+# SAT schedule patches file
+schedule_patches_file: data/schedules/patches_sat.txt
