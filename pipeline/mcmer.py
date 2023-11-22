@@ -13,6 +13,8 @@ def mcmer(o):
     nl = 3*man.nside
     # Number of polarisation combinations
     nspec = 4
+    
+    print(man.fname_mask)
 
     # Read and degrade mask
     print("Reading mask")

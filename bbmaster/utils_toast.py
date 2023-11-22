@@ -9,7 +9,7 @@ import healpy as hp
 from astropy import units as u
 import warnings
 warnings.simplefilter("ignore")
-#
+
 # Preprocess branch of sotodlib
 from sotodlib import coords, core
 import so3g
@@ -19,7 +19,10 @@ from sotodlib.hwp import hwp
 from sotodlib.tod_ops import fft_ops
 from sotodlib.tod_ops.fft_ops import calc_psd
 import logging
-#
+from sotodlib.site_pipeline.preprocess_tod import _build_pipe_from_configs, _get_preprocess_context
+from sotodlib.coords import demod
+from sotodlib import coords
+
 # Use sotodlib.toast to set default 
 # object names used in toast
 import sotodlib.toast as sotoast
@@ -34,7 +37,7 @@ import sotodlib.mapmaking
 # Import pixell
 import pixell.fft
 pixell.fft.engine = "fftw"
-#
+
 # Plotting
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -45,17 +48,21 @@ import ephem
 import dateutil.parser
 import healpy as hp
 from toast import qarray as qa
-
-# Avoid downloading pysm files from the 
-# web to which some computing nodes may
-# not have access
-os.environ['PYSM_LOCAL_DATA']='/home/sa5705/web_files/pysm_2/'
+import subprocess
 
 
 '''
 A collection of useful functions written by SA, and/or other SO members.
 '''
 
+def run_bash_command(command):
+    try:
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print("Command output:", result.stdout)
+        print("Command error (if any):", result.stderr)
+    except subprocess.CalledProcessError as e:
+        print("Error running command:", e)
+        
 def make_aman(sch, fig, ax, print_info=False, make_plot=False):
     DEG = np.pi/180
     ts_st = dt.datetime.strptime(sch[0]+' '+sch[1], '%Y-%m-%d %H:%M:%S').timestamp()
@@ -470,4 +477,20 @@ def split_schedule(schedule_file):
     return
 
 
-
+def preprocess(aman):
+    # Let's load the config file created 
+    configs="./preprocess/pipe_s0002_sim_preprocess.yaml"
+    configs = yaml.safe_load(open(configs, "r"))
+    # And build the pipeline including the filters 
+    # specified in the config
+    pipe = _build_pipe_from_configs(configs)
+    proc_aman = core.AxisManager(aman.dets, aman.samps)
+    for pi in np.arange(3):
+        # 1) Detrended
+        # 2) Apodize
+        # 3) Demodulate
+        process = pipe[pi]
+        #print(f"Processing {process.name}")
+        process.process(aman, proc_aman)
+        process.calc_and_save(aman, proc_aman)
+    return aman, proc_aman

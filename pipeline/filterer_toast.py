@@ -6,44 +6,39 @@ import subprocess
 from bbmaster.utils_toast import *
 import os
 
-def run_bash_command(command):
-    try:
-        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        print("Command output:", result.stdout)
-        print("Command error (if any):", result.stderr)
-    except subprocess.CalledProcessError as e:
-        print("Error running command:", e)
-        
-def make_schedule(sched_par, sched_patches):
+def filter_map(man, fin, outdir, sample_rate=32., query = 1, sched_path='data/schedules/schedule_sat_5hr.txt', add_noise=False, res=0.02*coords.DEG):
     """
-    Create schedule
-    TODO: Currently files
-    @schedules/schedule_sat.par \
-    @schedules/patches_sat.txt --debug
-    are already stored. set to read from global yaml.
-
-    default out: schedules/schedule_sat_1day.txt
-    """
-    command = f'toast_ground_schedule @{sched_par} @{sched_patches} --debug'
-    run_bash_command(command)
-
-def filter_map(inputmap_fl, nside_out=nside, sample_rate = 32., sched_path='data/schedules/schedule_sat_1day.txt', add_noise=False):
-    """
-    TODO: define input map file
-    TODO: read nside from yaml
     TODO: define stuff in yaml
     """
+    import time
+    start_time = time.time()
+
+    nside_out = man.nside
+    
     # Initialize schedule
     schedule = toast.schedule.GroundSchedule()
     if not os.path.exists(sched_path):
         # TODO change to: if sched_path==None
         # Make schedule
         make_schedule('data/schedules/schedule_sat.par', 'data/schedules/patches_sat.txt')
+
+    # Define mask from schedule
+    # TODO
+    # Mask the maps (binary) --> to be done when masks are saved
+    # cause scanning takes file as input, not array
+    ## TODO def mskfile
+    ## TODO define schedule + mask at MCM stage 
+    #mpQ *= msk
+    #mpU *= msk
+    
     # Read schedule
+    print('Read schedule')
     schedule.read(sched_path)
+
     # Setup focal plane
+    print('Initialize focal plane and telescope')
     focalplane = sotoast.SOFocalplane(hwfile=None,
-                                      telescope=schedule.telescope_name,
+                                      telescope='SAT1', #schedule.telescope_name,
                                       sample_rate=sample_rate * u.Hz,
                                       bands='SAT_f090',
                                       wafer_slots='w25', 
@@ -51,7 +46,7 @@ def filter_map(inputmap_fl, nside_out=nside, sample_rate = 32., sched_path='data
                                       thinfp=None,
                                       comm=None)
     # Setup telescope
-    telescope = toast.Telescope(name=schedule.telescope_name,
+    telescope = toast.Telescope(name='SAT1', #schedule.telescope_name,
                                 focalplane=focalplane, 
                                 site=toast.GroundSite("Atacama", schedule.site_lat,
                                                       schedule.site_lon, schedule.site_alt))
@@ -59,22 +54,79 @@ def filter_map(inputmap_fl, nside_out=nside, sample_rate = 32., sched_path='data
     data = toast.Data()
 
     # Apply filters
+    print('Apply filters')
     _, sim_gnd = apply_scanning(data, telescope, schedule) # HWP info in here, + all sim_ground stuff
     data, det_pointing_radec = apply_det_pointing_radec(data, sim_gnd)
-    data, det_pointing_azel = apply_det_pointing_azel(data, sim_gnd)
+    #data, det_pointing_azel = apply_det_pointing_azel(data, sim_gnd)
     data, pixels_radec = apply_pixels_radec(data, det_pointing_radec, nside_out)
     data, weights_radec = apply_weights_radec(data, det_pointing_radec)
     if add_noise:
         _, noise_model = apply_noise_model(data)
         data, sim_noise = apply_sim_noise(data)
-    
-    # Input map
-    IQUmap = hp.read_map(inputmap_fl, field=[0,1,2])
-
     # Scan map
-    data, scan_map = apply_scan_map(data, inputmap_fl, pixels_radec, weights_radec)
+    
+    # -------------------------------------------------------------------------
+    print('Save hdf5 and context files')
+    # TODO: Temporary data products, to take away 
+    # TODO: modify subsequent part not to read from stored files
+    #
+    # Save HDF5
+    #ootod = os.path.join(outdir, "filtered_data/")
+    hdf5_path = os.path.join(outdir, "hdf5")
+    if not os.path.isdir(hdf5_path):
+        os.system('mkdir -p ' + hdf5_path)
+        save_hdf5 = toast.ops.SaveHDF5(name="save_hdf5")
+        save_hdf5.volume = hdf5_path
+        save_hdf5.apply(data)
+    #
+    # Save context 
+    import write_context
+    export_dirs = [f"{hdf5_path}/"]  # Directory to search for HDF data files
+    context_dir = f"{export_dirs[0]}"  #context_south-0-29"  # Change this to desired output context directory
+    if not os.path.isfile(f'{context_dir}context.yaml'):
+        os.system('mkdir -p ' + context_dir)
+        write_context.create_context(context_dir, export_dirs) #TODO: currently exportdir and contextdir are the same 
+    # -------------------------------------------------------------------------
+    
+    # Load context 
+    context = Context(f'{context_dir}context.yaml')
+    obs = context.obsdb.get()
+    ids = context.obsdb.query(query)['obs_id']
+    wafer_list = obs['wafer_slots']
+    dets_dict = {'dets:wafer_slot':wafer_list}
 
-
+    # Many observations for 1 one wafer at 1 freq 
+    print('Create coadded maps')
+    npol = 3
+    npix = hp.nside2npix(nside_out) 
+    coadd_map = np.zeros([npol, npix])
+    coadd_weighted_map = np.zeros([npol, npix])
+    coadd_weight = np.zeros([npol, npol, npix])
+    for ind in range(len(ids)):
+        print(ind)
+        # Load data
+        obs_id = ids[ind]
+        detsets = context.obsfiledb.get_detsets(obs_id) #Detsets correspond to separate files, i.e. treat as separate TODs.
+        dets_dict['band'] = 'f090'
+        meta = context.get_meta(obs_id=obs_id, dets=dets_dict)
+        aman = context.get_obs(obs_id=obs_id, meta=meta)
+        # Pre-process data (additional filters!!)
+        aman, proc_aman = preprocess(aman)
+        # Make CAR2healpix maps
+        map_dict = demod.make_map(aman, res=res, dsT=aman.dsT, demodQ=aman.demodQ, demodU=aman.demodU)
+        m_hp = map_dict['map'].to_healpix(nside=nside_out, order=0)
+        w_hp = map_dict['weight'].to_healpix(nside=nside_out, order=0)
+        mt_hp = map_dict['weighted_map'].to_healpix(nside=nside_out, order=0)
+        # Coadd maps 
+        coadd_map += m_hp
+        coadd_weighted_map += mt_hp
+        coadd_weight += w_hp
+    print('end1')
+    print((time.time() - start_time)/60, 'minutes')
+    print(coadd_map)
+    print('end2')
+    return coadd_map, coadd_weighted_map, coadd_weight
+    
 #def filter_map(man, schedule, bands, telescope, sample_rate, thinfp, scan_map, out_dir, group_size):
 #    # make the output dir
 #    subprocess.call(['mkdir','-p',out_dir])
@@ -98,7 +150,9 @@ if __name__ == '__main__':
     parser.add_argument("--thinfp", type=int, default=8, help='Thin the focal plane by how much?')
     parser.add_argument("--group-size", type=int, default=1, help='Group size')
     parser.add_argument("--output-dir", type=str, help='Output directory')
-    
+
+    #parser.add_argument("--nside", type=int, default=64, help='Nside')
+
     o = parser.parse_args()
     man = PipelineManager(o.globals)
 
@@ -106,6 +160,13 @@ if __name__ == '__main__':
     file_input_list = sorter(o.first_sim, o.num_sims, o.output_dir, which='input')
     file_output_list = sorter(o.first_sim, o.num_sims, o.output_dir, which='filtered')
     
-    #for fin, fout in zip(file_input_list, file_output_list):
-    #    outdir = fout.replace('.fits','/')
-    #    filter_map(man, o.schedule, o.bands, o.telescope, o.sample_rate, o.thinfp, fin, outdir, o.group_size)
+    for fin, fout in zip(file_input_list, file_output_list):
+        print(fin)
+        print(fout)
+        outdir = fout.replace('.fits','/')
+        print(outdir)
+        # Filter
+        maps, weighted_maps, weights = filter_map(man, fin, outdir)
+        hp.write_map(fout, maps, overwrite=True)
+        print(maps)
+        print(fout)

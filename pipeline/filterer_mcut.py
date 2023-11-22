@@ -3,7 +3,6 @@ import healpy as hp
 from bbmaster.utils import PipelineManager
 import numpy as np
 
-
 def filter_map(man, mpQ, mpU, msk, m_cut):
     # Mask the maps (binary)
     mpQ *= msk
@@ -45,9 +44,10 @@ if __name__ == '__main__':
 							 which='input')
 	file_output_list = sorter(o.first_sim, o.num_sims, o.output_dir,
 							  which='filtered')
-
-	msk = hp.read_map(man.fname_binary_mask)
+    
+	msk = hp.ud_grade(hp.read_map(man.fname_binary_mask), nside_out=man.nside)
 	for fin, fout in zip(file_input_list, file_output_list):
+		#print(fin)
 		# Read maps
 		mpQ, mpU = hp.read_map(fin, field=[1,2]) # this is because now maps have to be TQU
 		# Filter

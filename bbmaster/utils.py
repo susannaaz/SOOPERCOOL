@@ -5,57 +5,68 @@ from scipy.interpolate import interp1d
 import pymaster as nmt
 import healpy as hp
 import sacc
+import h5py
 
+def get_pcls(man, fnames, names, fname_out, mask, binning, beam_fwhm=None, winv=None, filtered_with_toast=False):
+	"""
+	man -> pipeline manager
+	fnames -> files with input maps
+	names -> map names
+	fname_out -> output file name
+	mask -> mask
+	binning -> binning scheme to use
+	winv -> inverse binned MCM (optional)
+	filtered_with_toast -> if True, then we should look for our map file in fnames.replace('.fits','/')+'filterbin_filtered_map.fits', following the convention of toast for outputting maps. Also we need to correct for the PWF if filtered with toast (since maps are made from timestream in a pixelized sky)
+	"""
 
-def get_pcls(man, fnames, names, fname_out, mask, binning, winv=None):
-    """
-    man -> pipeline manager
-    fnames -> files with input maps
-    names -> map names
-    fname_out -> output file name
-    mask -> mask
-    binning -> binning scheme to use
-    winv -> inverse binned MCM (optional)
-    """
+	if winv is not None:
+		nbpw = binning.get_n_bands()
+		if winv.shape != (4, nbpw, 4, nbpw):
+			raise ValueError("Incompatible binning scheme and "
+							 "binned MCM.")
+		winv = winv.reshape([4*nbpw, 4*nbpw])
+	if beam_fwhm is not None:
+		beam = hp.gauss_beam(np.radians(beam_fwhm), lmax=3*man.nside-1, pol=True)
+	pwf = hp.pixwin(man.nside, pol=True, lmax=3*man.nside-1)
 
-    if winv is not None:
-        nbpw = binning.get_n_bands()
-        if winv.shape != (4, nbpw, 4, nbpw):
-            raise ValueError("Incompatible binning scheme and "
-                             "binned MCM.")
-        winv = winv.reshape([4*nbpw, 4*nbpw])
+	# Read maps
+	fields = []
+	for fname in fnames:
+		if filtered_with_toast:
+			f = h5py.File(fname.replace('.fits','/')+'filterbin_filtered_map.h5', 'r')
+			mp = f['map'] ; mp = hp.reorder(mp, n2r=True)
+			f = nmt.NmtField(mask, mp[1:], beam=beam[:,0]*pwf[1])
+		else:
+			mpQ, mpU = hp.read_map(fname, field=[1, 2])
+			if beam_fwhm is not None:
+				f = nmt.NmtField(mask, [mpQ, mpU], beam=beam[:,0])
+			else:
+				f = nmt.NmtField(mask, [mpQ, mpU],)
+		fields.append(f)
+	nmaps = len(fields)
 
-    # Read maps
-    fields = []
-    for fname in fnames:
-        mpQ, mpU = hp.read_map(fname, field=[0, 1])
-        f = nmt.NmtField(mask, [mpQ, mpU])
-        fields.append(f)
-    nmaps = len(fields)
+	# Compute pseudo-C_\ell
+	cls = []
+	for icl, i, j in man.cl_pair_iter(nmaps):
+		f1 = fields[i]
+		f2 = fields[j]
+		pcl = binning.bin_cell(nmt.compute_coupled_cell(f1, f2))
+		if winv is not None:
+			pcl = np.dot(winv, pcl.flatten()).reshape([4, nbpw])
+		cls.append(pcl)
 
-    # Compute pseudo-C_\ell
-    cls = []
-    for icl, i, j in man.cl_pair_iter(nmaps):
-        f1 = fields[i]
-        f2 = fields[j]
-        pcl = binning.bin_cell(nmt.compute_coupled_cell(f1, f2))
-        if winv is not None:
-            pcl = np.dot(winv, pcl.flatten()).reshape([4, nbpw])
-        cls.append(pcl)
-
-    # Save to sacc
-    leff = binning.get_effective_ells()
-    s = sacc.Sacc()
-    for n in names:
-        s.add_tracer('Misc', n)
-    for icl, i, j in man.cl_pair_iter(nmaps):
-        s.add_ell_cl('cl_ee', names[i], names[j], leff, cls[icl][0])
-        s.add_ell_cl('cl_eb', names[i], names[j], leff, cls[icl][1])
-        if i != j:
-            s.add_ell_cl('cl_be', names[i], names[j], leff, cls[icl][2])
-        s.add_ell_cl('cl_bb', names[i], names[j], leff, cls[icl][3])
-    s.save_fits(fname_out, overwrite=True)
-
+	# Save to sacc
+	leff = binning.get_effective_ells()
+	s = sacc.Sacc()
+	for n in names:
+		s.add_tracer('Misc', n)
+	for icl, i, j in man.cl_pair_iter(nmaps):
+		s.add_ell_cl('cl_ee', names[i], names[j], leff, cls[icl][0])
+		s.add_ell_cl('cl_eb', names[i], names[j], leff, cls[icl][1])
+		if i != j:
+			s.add_ell_cl('cl_be', names[i], names[j], leff, cls[icl][2])
+		s.add_ell_cl('cl_bb', names[i], names[j], leff, cls[icl][3])
+	s.save_fits(fname_out, overwrite=True)
 
 def beam_gaussian(ll, fwhm_amin):
     """
@@ -120,7 +131,7 @@ class PipelineManager(object):
             fname = fdir
         if product == 'pl_sim_input':  # Input PL sims
             fdir = self.pl_input_dir
-            fname = os.path.join(self.pl_input_dir,
+            fname = os.path.join(fdir,
                                  simname+'.fits')
         if product == 'pl_sim_filtered':  # Filtered PL sims
             fdir = os.path.join(out_base_dir,
@@ -166,12 +177,12 @@ class PipelineManager(object):
                                 self.stname_transfer)
             fname = os.path.join(fdir,
                                  'transfer.npz')
-        if product == 'transfer_validation': #Added SA
+        if product == 'transfer_validation':
             fdir = os.path.join(out_base_dir,
                                 self.stname_transfer)
             fname = os.path.join(fdir,
                                  'transfer_validation.npz')
-        os.system(f'mkdir -p {fdir}') #Added SA
+        os.system(f'mkdir -p {fdir}') 
         return fname
 
     def _get_cls_PL(self):

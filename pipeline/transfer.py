@@ -21,12 +21,15 @@ if __name__ == '__main__':
 
     # Get all simulation names and the pCl files
     sorter = man.pl_sim_names_EandB
-    sim_names = sorter(0, -1, o.output_dir, which='names')
-    pcl_in_names = sorter(0, -1, o.output_dir, which='input_Cl')
-    pcl_filt_names = sorter(0, -1, o.output_dir, which='filtered_Cl')
-
+    sim_names = sorter(0, 10, o.output_dir, which='names')
+    pcl_in_names = sorter(0, 10, o.output_dir, which='input_Cl')
+    pcl_filt_names = sorter(0, 10, o.output_dir, which='filtered_Cl')
+    #print(pcl_in_names)
+    
     # Loop through each file and read all power spectra
     nsims = len(sim_names)
+    print('Nsims = ', nsims)
+    #print(sim_names)
     cls_in = []
     cls_filt = []
     for n, pin, pfilt in zip(sim_names, pcl_in_names, pcl_filt_names):
