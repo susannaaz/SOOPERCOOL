@@ -7,7 +7,7 @@ from bbmaster.utils_toast import *
 import os
 
 def filter_map(man, fin, outdir, sched_path, thinfp, instrument, band, sample_rate, add_noise, 
-               query=1, res=0.02*coords.DEG):
+               maps_car, query=1, res=0.02*coords.DEG):
             
     """
     TOAST-based filtering - adapting the toast_so_sim workflow from toast into BBMASTER, 
@@ -69,7 +69,6 @@ def filter_map(man, fin, outdir, sched_path, thinfp, instrument, band, sample_ra
         save_hdf5 = toast.ops.SaveHDF5(name="save_hdf5")
         save_hdf5.volume = hdf5_path
         save_hdf5.apply(data)
-    #
     # Save context 
     import write_context
     export_dirs = [f"{hdf5_path}/"]  # Directory to search for HDF data files
@@ -77,43 +76,56 @@ def filter_map(man, fin, outdir, sched_path, thinfp, instrument, band, sample_ra
     if not os.path.isfile(f'{context_dir}context.yaml'):
         os.system('mkdir -p ' + context_dir)
         write_context.create_context(context_dir, export_dirs) #TODO: currently exportdir and contextdir are the same 
-    
-    # Load context 
-    context = Context(f'{context_dir}context.yaml')
-    obs = context.obsdb.get()
-    ids = context.obsdb.query(query)['obs_id']
-    wafer_list = obs['wafer_slots']
-    dets_dict = {'dets:wafer_slot':wafer_list}
-    
-    # Coadd observations for one wafer at 1 freq 
-    # TODO: Curently using sotodlib filter-bin map-maker
-    # TODO: might want to coadd based on other params 
-    print('Create coadded maps')
-    npol = 3
-    npix = hp.nside2npix(nside_out) 
-    coadd_map = np.zeros([npol, npix])
-    coadd_weighted_map = np.zeros([npol, npix])
-    coadd_weight = np.zeros([npol, npol, npix])
-    for ind in range(len(ids)):
-        # Load data
-        obs_id = ids[ind]
-        detsets = context.obsfiledb.get_detsets(obs_id) #Detsets correspond to separate files, i.e. treat as separate TODs.
-        dets_dict['band'] = 'f090'
-        meta = context.get_meta(obs_id=obs_id, dets=dets_dict)
-        aman = context.get_obs(obs_id=obs_id, meta=meta)
-        # Pre-process data (additional filters!)
-        aman, proc_aman = preprocess(aman)
-        # Make CAR2healpix maps
-        map_dict = demod.make_map(aman, res=res, dsT=aman.dsT, demodQ=aman.demodQ, demodU=aman.demodU)
-        m_hp = map_dict['map'].to_healpix(nside=nside_out, order=0)
-        w_hp = map_dict['weight'].to_healpix(nside=nside_out, order=0)
-        mt_hp = map_dict['weighted_map'].to_healpix(nside=nside_out, order=0)
-        # Coadd maps 
-        coadd_map += m_hp
-        coadd_weighted_map += mt_hp
-        coadd_weight += w_hp
+        
+    if maps_car: 
+        # Load context 
+        context = Context(f'{context_dir}context.yaml')
+        obs = context.obsdb.get()
+        ids = context.obsdb.query(query)['obs_id']
+        wafer_list = obs['wafer_slots']
+        dets_dict = {'dets:wafer_slot':wafer_list}
+        # Coadd observations for one wafer at 1 freq 
+        # TODO: Curently using sotodlib filter-bin map-maker
+        # TODO: might want to coadd based on other params 
+        print('Create coadded maps')
+        npol = 3
+        npix = hp.nside2npix(nside_out) 
+        coadd_map = np.zeros([npol, npix])
+        coadd_weighted_map = np.zeros([npol, npix])
+        coadd_weight = np.zeros([npol, npol, npix])
+        for ind in range(len(ids)):
+            # Load data
+            obs_id = ids[ind]
+            detsets = context.obsfiledb.get_detsets(obs_id) #detsets correspond to separate files, i.e. treat as separate TODs.
+            dets_dict['band'] = 'f090'
+            meta = context.get_meta(obs_id=obs_id, dets=dets_dict)
+            aman = context.get_obs(obs_id=obs_id, meta=meta)
+            # Pre-process data (additional filters!)
+            aman, proc_aman = preprocess(aman)
+            # Make CAR maps and convert to healpix w/ pixell
+            map_dict = demod.make_map(aman, res=res, dsT=aman.dsT, demodQ=aman.demodQ, demodU=aman.demodU)
+            m_hp = map_dict['map'].to_healpix(nside=nside_out, order=0)
+            w_hp = map_dict['weight'].to_healpix(nside=nside_out, order=0)
+            mt_hp = map_dict['weighted_map'].to_healpix(nside=nside_out, order=0)
+            # Coadd maps 
+            coadd_map += m_hp
+            coadd_weighted_map += mt_hp
+            coadd_weight += w_hp
+        # Write to file 
+        hp.write_map(fout, maps, overwrite=True)
+    else: 
+        # Make healpix maps using toast's map-maker
+        binning = toast.ops.BinMap()
+        binning.pixel_pointing = pixels_radec
+        binning.stokes_weights = weights_radec
+        mapmaker = toast.ops.MapMaker(name="mapmaker")
+        mapmaker.binning = binning
+        mapmaker.output_dir = outdir
+        mapmaker.apply(data)
+
     print((time.time() - start_time)/60, 'minutes')
-    return coadd_map, coadd_weighted_map, coadd_weight
+
+    return 
     
 def filter_map_temp(man, schedule, bands, telescope, sample_rate, thinfp, scan_map, out_dir, group_size):
     # make the output dir
@@ -139,6 +151,7 @@ if __name__ == '__main__':
     parser.add_argument("--group-size", type=int, default=1, help='Group size')
     parser.add_argument("--output-dir", type=str, help='Output directory')
     parser.add_argument("--noise", default=False, action='store_true', help='Set to add noise, default=False')
+    parser.add_argument("--carmaps", default=False, action='store_true', help='Set to produce maps in CAR before converting to healpix, default=False')
 
     o = parser.parse_args()
     man = PipelineManager(o.globals)
@@ -149,8 +162,7 @@ if __name__ == '__main__':
     
     for fin, fout in zip(file_input_list, file_output_list):
         outdir = fout.replace('.fits','/')
-        # Filter
-        maps, weighted_maps, weights = filter_map(man, fin, outdir, sched_path=o.schedule, thinfp=o.thinfp, instrument=o.telescope,
-                                                 band=o.bands, sample_rate=o.sample-rate, add_noise=o.noise)
-        # Write to file 
-        hp.write_map(fout, maps, overwrite=True)
+        # Filter and save maps
+        filter_map(man, fin, outdir, sched_path=o.schedule, thinfp=o.thinfp, instrument=o.telescope, band=o.bands, sample_rate=o.sample_rate, add_noise=o.noise, maps_car=o.carmaps)
+
+        
