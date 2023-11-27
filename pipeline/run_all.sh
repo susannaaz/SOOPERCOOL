@@ -3,19 +3,19 @@ paramfile='/pscratch/sd/s/susannaz/SOOPERCOOL/paramfiles/paramfile_susanna.yaml'
 echo "Running pipeline with paramfile: ${paramfile}"
 
 #echo "Pre-processing data..."
-echo "-------------------"
-python3 pipeline/pre_processer.py --globals ${paramfile} --sims --plots
+#echo "-------------------"
+#python3 pipeline/pre_processer.py --globals ${paramfile} --sims --plots
 
 #echo "Running mask stage..."
 #echo "---------------------"
 #python3 pipeline/mask_handler.py --globals ${paramfile} --plot
 
-#echo "Running mock stage for data..."
-#echo "------------------------------"
-#python pipeline/mocker.py --globals ${paramfile} --plot 
-#echo "Running mock stage for sims..."
-#echo "------------------------------"
-#python mocker.py --globals ${paramfile} --sims
+echo "Running mock stage for data..."
+echo "------------------------------"
+#python pipeline/mocker.py --globals ${paramfile} --plots 
+echo "Running mock stage for sims..."
+echo "------------------------------"
+python pipeline/mocker.py --globals ${paramfile} --sims
 
 #echo "Running mcm..."
 #echo "--------------"

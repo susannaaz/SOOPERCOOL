@@ -60,21 +60,20 @@ def get_pcls(man, fnames, names, fname_out, mask, binning, winv=None):
     s.save_fits(fname_out, overwrite=True)
 
 
-def theory_cls(cosmo_params, lmax, lmin=0):
+def theory_cls(cosmo_params, lmax, lmin=0, EB_TB_null=True):
     """
     """
     params = camb.set_params(**cosmo_params)
     results = camb.get_results(params)
     powers = results.get_cmb_power_spectra(params, CMB_unit='muK', raw_cl=True)
     ell = np.arange(lmin, lmax+1)
-    out_ps = {
-        "TT": powers["total"][:, 0][lmin:lmax+1],
-        "EE": powers["total"][:, 1][lmin:lmax+1],
-        "TE": powers["total"][:, 3][lmin:lmax+1],
-        "BB": powers["total"][:, 2][lmin:lmax+1]
-    }
-    for spec in ["EB", "TB"]:
-        out_ps[spec] = np.zeros_like(ell)
+    out_ps = {}
+    spectra_names = ["TT", "EE", "BB", "TE"]
+    for i, spec_name in enumerate(spectra_names):
+        out_ps[spec_name] = powers["total"][:, i][lmin:lmax + 1]
+    if EB_TB_null: #TODO: add option if not null
+        for spec in ["EB", "TB"]:
+            out_ps[spec] = np.zeros_like(ell)
     return ell, out_ps
 
 

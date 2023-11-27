@@ -18,7 +18,7 @@ def mask_handler(args):
     meta = BBmeta(args.globals)
     mask_dir = meta.mask_directory
 
-    timeout = 60 # Set the timeout to 60 seconds for the socket 
+    timeout = 300 # Set the timeout to 60 seconds for the socket 
     
     os.makedirs(mask_dir, exist_ok=True)
 

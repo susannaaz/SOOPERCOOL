@@ -58,8 +58,9 @@ def mocker(args):
 
         # Save beams
         file_root = meta.file_root_from_map_set(map_set)
-        np.savetxt(f"{beam_dir}/beam_{file_root}.dat",
-                   np.transpose([lth, beams[map_set]]))
+        if not os.path.exists(file_root):
+            np.savetxt(f"{beam_dir}/beam_{file_root}.dat",
+                       np.transpose([lth, beams[map_set]]))
     meta.timer.stop("Generating beams")
 
     hp_ordering = ["TT", "TE", "TB", "EE", "EB", "BB"]
@@ -89,6 +90,9 @@ def mocker(args):
                     map_set, id_split,
                     id_sim if Nsims > 1 else None
                 )
+                
+                #print(map_file_name)
+                
                 hp.write_map(
                     map_file_name,
                     split_map,
@@ -100,6 +104,7 @@ def mocker(args):
                     if Nsims == 1:
                         plot_dir = meta.plot_dir_from_output_dir(
                             meta.map_directory_rel)
+                        #print(plot_dir)
                         for i, m in enumerate("TQU"):
                             vrange = 300 if m == "T" else 10
                             plt.figure(figsize=(16, 9))
