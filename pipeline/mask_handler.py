@@ -12,42 +12,42 @@ import urllib.request
 cmap = cm.YlOrRd
 cmap.set_under("w")
 
-
 def mask_handler(args):
     """
     """
     meta = BBmeta(args.globals)
     mask_dir = meta.mask_directory
 
+    timeout = 60 # Set the timeout to 60 seconds for the socket 
+    
     os.makedirs(mask_dir, exist_ok=True)
 
     # Download SAT hits map
     print("Download and save SAT hits map ...")
     sat_nhits_file = f"{mask_dir}/norm_nHits_SA_35FOV_ns512.fits.fits"
     if not os.path.exists(sat_nhits_file):
-        urllib.request.urlretrieve(
-            "https://portal.nersc.gov/cfs/sobs/users/so_bb/norm_nHits_SA_35FOV_ns512.fits",  # noqa
-            filename=sat_nhits_file
-        )
+        url = "https://portal.nersc.gov/cfs/sobs/users/so_bb/norm_nHits_SA_35FOV_ns512.fits"
+        # Open the URL with a timeout
+        with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
+            # Retrieve the file and save it locally
+            urllib.request.urlretrieve(url, filename=sat_nhits_file)
 
     # Download SAT apodized mask used in the SO BB
     # pipeline paper (https://arxiv.org/abs/2302.04276)
     print("Download and save SAT apodized mask ...")
     sat_apo_file = f"{mask_dir}/apodized_mask_bbpipe_paper.fits"
     if not os.path.exists(sat_apo_file):
-        urllib.request.urlretrieve(
-            "https://portal.nersc.gov/cfs/sobs/users/so_bb/apodized_mask_bbpipe_paper.fits",  # noqa
-            filename=sat_apo_file
-        )
+        url = "https://portal.nersc.gov/cfs/sobs/users/so_bb/apodized_mask_bbpipe_paper.fits" 
+        with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
+            urllib.request.urlretrieve(url, filename=sat_apo_file)
 
     # Download galactic mask
     print("Download and save planck galactic masks ...")
     mask_p15_file = f"{mask_dir}/mask_planck2015.fits"
     if not os.path.exists(mask_p15_file):
-        urllib.request.urlretrieve(
-            "http://pla.esac.esa.int/pla/aio/product-action?MAP.MAP_ID=HFI_Mask_GalPlane-apo0_2048_R2.00.fits",  # noqa
-            filename=mask_p15_file
-        )
+        url = "http://pla.esac.esa.int/pla/aio/product-action?MAP.MAP_ID=HFI_Mask_GalPlane-apo0_2048_R2.00.fits"
+        with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
+            urllib.request.urlretrieve(url, filename=mask_p15_file)
 
     # Save different galactic masks
     meta.timer.start("proj_gal")

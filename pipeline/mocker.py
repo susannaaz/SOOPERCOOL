@@ -99,7 +99,7 @@ def mocker(args):
                 if args.plots:
                     if Nsims == 1:
                         plot_dir = meta.plot_dir_from_output_dir(
-                            meta.map_directory_relative)
+                            meta.map_directory_rel)
                         for i, m in enumerate("TQU"):
                             vrange = 300 if m == "T" else 10
                             plt.figure(figsize=(16, 9))
