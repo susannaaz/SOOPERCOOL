@@ -10,21 +10,21 @@ echo "Running pipeline with paramfile: ${paramfile}"
 #echo "---------------------"
 #python3 pipeline/mask_handler.py --globals ${paramfile} --plot
 
-echo "Running mock stage for data..."
-echo "------------------------------"
+#echo "Running mock stage for data..."
+#echo "------------------------------"
 #python pipeline/mocker.py --globals ${paramfile} --plots 
-echo "Running mock stage for sims..."
-echo "------------------------------"
-python pipeline/mocker.py --globals ${paramfile} --sims
+#echo "Running mock stage for sims..."
+#echo "------------------------------"
+#python pipeline/mocker.py --globals ${paramfile} --sims
 
 #echo "Running mcm..."
 #echo "--------------"
-#python mcmer.py --globals ${paramfile}
-#
-#echo "Running filterer for transfer"
-#echo "-----------------------------"
-#python filterer.py --globals ${paramfile} --transfer
-#
+#python pipeline/mcmer.py --globals ${paramfile}
+
+echo "Running filterer for transfer"
+echo "-----------------------------"
+python pipeline/filterer.py --globals ${paramfile} --transfer
+
 #echo "Running filterer for sims"
 #echo "-------------------------"
 #python filterer.py --globals ${paramfile} --sims
