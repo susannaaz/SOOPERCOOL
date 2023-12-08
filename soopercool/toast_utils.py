@@ -127,8 +127,11 @@ def apply_demodulation(data, weights_radec, sim_gnd, binner):
     return data, demod_weights
 
 
-def make_filterbin(data, binner, output_dir):
-    filterbin = toast.ops.FilterBin()
+def make_filterbin(poly_filter_order=1, write_obs_matrix=False,
+                   data, binner, output_dir):
+    filterbin = toast.ops.FilterBin(
+        poly_filter_order=poly_filter_order,
+        write_obs_matrix=write_obs_matrix)
     filterbin.binning = binner
     filterbin.output_dir = output_dir
     filterbin.name = 'FilterBin'
@@ -137,6 +140,35 @@ def make_filterbin(data, binner, output_dir):
     filterbin.write_rcond = False
     filterbin.apply(data)
 
+    
+def highpass_filter(aman):
+    # TODO: eventually want to include in pre-process
+    # function below --> to be compatiblle with sotodlib
+    # TODO: that means we need to be able to store/read
+    # context file (with both sims/real data)
+    #
+    ###SOTODLIB
+    from sotodlib.tod_ops import apodize, filters
+    fft_ops, detrend_tod, apodize, jumps, pca
+    # Apodize
+    ##apodize.apodize_cosine(aman,apodize_samps=20*200)
+    ### HPF
+    ##hpf = filters.high_pass_sine2(0.25)
+    ##sighpf = filters.fourier_filter(aman, hpf)
+    #
+    ###Sigurd's
+    ### Apply a mild highpass filter
+    ##import pixell
+    ##from pixell import enmap, utils, fft
+    ##dt    = np.median(np.gradient(data.timestamps))
+    ##freqs = fft.rfftfreq(data.samps.count, dt).astype(data.signal.dtype)
+    ##flt = (1+(freqs/fknee)**-3)**-1
+    ##ftod  = fft.rfft(data.signal)
+    ##ftod *= flt
+    
+    return sighpf
+    
+    
 
 def preprocess(aman):
     # Let's load the config file created
