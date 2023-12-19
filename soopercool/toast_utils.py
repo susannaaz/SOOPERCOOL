@@ -127,8 +127,8 @@ def apply_demodulation(data, weights_radec, sim_gnd, binner):
     return data, demod_weights
 
 
-def make_filterbin(poly_filter_order=1, write_obs_matrix=False,
-                   data, binner, output_dir):
+def make_filterbin(data, binner, output_dir,
+                   write_obs_matrix=False, poly_filter_order=1):
     filterbin = toast.ops.FilterBin(
         poly_filter_order=poly_filter_order,
         write_obs_matrix=write_obs_matrix)

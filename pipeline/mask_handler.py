@@ -20,9 +20,10 @@ def mask_handler(args):
 
     os.makedirs(mask_dir, exist_ok=True)
 
-    # Download SAT hits map
-    print("Download and save SAT hits map ...")
+    # Get hits map
+    print("Get hits map ...")
     sat_nhits_file = meta.hitmap_file
+    print(sat_nhits_file)
     if not os.path.exists(sat_nhits_file):
         urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
         url = f"{urlpref}norm_nHits_SA_35FOV_ns512.fits"
@@ -31,19 +32,57 @@ def mask_handler(args):
             # Retrieve the file and save it locally
             urllib.request.urlretrieve(url, filename=sat_nhits_file)
 
-    # Download SAT apodized mask used in the SO BB
-    # pipeline paper (https://arxiv.org/abs/2302.04276)
-    print("Download and save SAT apodized mask ...")
+    # Get binary survey mask from a hitmap
+    meta.timer.start("Computing binary mask")
+    binary_mask_file = meta._get_binary_mask_name()
+    print(binary_mask_file)
+    if not os.path.exists(binary_mask_file):
+        sat_nhits = hp.read_map(sat_nhits_file)
+        binary_maskk = (sat_nhits > 0).astype(float)
+        binary_mask = hp.ud_grade(binary_maskk, meta.nside)
+        meta.save_mask("binary", binary_mask, overwrite=True)
+    binary_mask = hp.read_map(binary_mask_file)
+    meta.timer.stop("Computing binary mask", args.verbose)
+
+    if args.plots:
+        cmap = cm.YlOrRd
+        cmap.set_under("w")
+        plt.figure(figsize=(16, 9))
+        hp.mollview(binary_mask, cmap=cmap, cbar=False)
+        hp.graticule()
+        plt.savefig(meta.binary_mask_name.replace('.fits', '.png'))
+
+    # Download SAT apodized mask
+    print("Get apodized mask ...")
     sat_apo_file = meta._get_analysis_mask_name()
+    filename = os.path.basename(sat_apo_file)
     if not os.path.exists(sat_apo_file):
-        urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
-        url = f"{urlpref}apodized_mask_bbpipe_paper.fits"
-        with urllib.request.urlopen(url, timeout=timeout_seconds):
-            urllib.request.urlretrieve(url, filename=sat_apo_file)
-            sat_apo_mask = hp.read_map(sat_apo_file, field=0)
-            sat_apo_mask = hp.ud_grade(sat_apo_mask, meta.nside)
-            hp.write_map(sat_apo_file, sat_apo_mask, overwrite=True,
-                         dtype=np.int32)
+        # Download full SAT patch
+        # consistent with https://arxiv.org/abs/2302.04276
+        # TODO: update version of patch
+        if filename == "apodized_mask_bbpipe_paper.fits":
+            urlpref = "https://portal.nersc.gov/cfs/sobs/users/so_bb/"
+            url = f"{urlpref}apodized_mask_bbpipe_paper.fits"
+            with urllib.request.urlopen(url, timeout=timeout_seconds):
+                urllib.request.urlretrieve(url, filename=sat_apo_file)
+                sat_apo_mask = hp.read_map(sat_apo_file, field=0)
+                sat_apo_mask = hp.ud_grade(sat_apo_mask, meta.nside)
+        # Apodize custom input binary
+        else:
+            zero = 1E-3
+            aposcale = 15.
+            nh = binary_mask
+            nhg = hp.smoothing(nh, fwhm=5*np.pi/180, verbose=False)
+            nhg[nhg < 0] = 0
+            nh /= np.amax(nh)
+            nhg /= np.amax(nhg)
+            mpbg = np.zeros_like(nhg)
+            mpbg[nhg > zero] = 1
+            mskg = nmt.mask_apodization(mpbg, aposcale, apotype='C1')
+            sat_apo_mask = mskg*nhg
+
+        hp.write_map(sat_apo_file, sat_apo_mask, overwrite=True,
+                     dtype=np.float64)
 
     # Download galactic mask
     if "galactic" in meta.masks["include_in_mask"]:
@@ -86,23 +125,6 @@ def mask_handler(args):
                 hp.mollview(gal_mask_p15, cmap=cmap, cbar=False)
                 hp.graticule()
                 plt.savefig(fname.replace("fits", "png"))
-
-    # Generate binary survey mask from a hitmap
-    meta.timer.start("Computing binary mask")
-    binary_mask_file = meta._get_binary_mask_name()
-    if not os.path.exists(binary_mask_file):
-        sat_nhits = hp.read_map(sat_nhits_file)
-        binary_maskk = (sat_nhits > 0).astype(float)
-        binary_mask = hp.ud_grade(binary_maskk, meta.nside)
-        meta.save_mask("binary", binary_mask, overwrite=True)
-    binary_mask = hp.read_map(binary_mask_file)
-    meta.timer.stop("Computing binary mask", args.verbose)
-
-    if args.plots:
-        plt.figure(figsize=(16, 9))
-        hp.mollview(binary_mask, cmap=cmap, cbar=False)
-        hp.graticule()
-        plt.savefig(meta.binary_mask_name.replace('.fits', '.png'))
 
     # Generate mock point source mask
     if "point_source" in meta.masks["include_in_mask"]:
@@ -147,7 +169,7 @@ def mask_handler(args):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='simplistic simulator')
+    parser = argparse.ArgumentParser(description='mask simulator')
     parser.add_argument("--globals", type=str,
                         help="Path to yaml with global parameters")
     parser.add_argument("--plots", action="store_true")
