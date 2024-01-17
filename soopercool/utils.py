@@ -618,8 +618,7 @@ def get_apodized_mask_from_nhits(nhits_map, nside,
                                  apod_radius_point_source=4.,
                                  apod_type="C1"):
     """
-    Produce an appropriately apodized mask from an nhits map as used in
-    the BB pipeline paper (https://arxiv.org/abs/2302.04276).
+    Produce an appropriately apodized mask from an nhits map.
 
     Procedure:
     * Make binary mask by smoothing, normalizing and thresholding nhits map
