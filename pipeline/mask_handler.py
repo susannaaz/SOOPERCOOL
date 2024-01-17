@@ -165,6 +165,7 @@ def mask_handler(args):
         hp.graticule()
         plt.savefig(meta.analysis_mask_name.replace(".fits", ".png"))
 
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='simplistic simulator')
