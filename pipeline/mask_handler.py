@@ -165,16 +165,13 @@ def mask_handler(args):
         hp.graticule()
         plt.savefig(meta.analysis_mask_name.replace(".fits", ".png"))
 
-    print(meta.analysis_mask_name)
-    print(meta.binary_mask_name)
-    
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='simplistic simulator')
     parser.add_argument("--globals", type=str,
                         help="Path to yaml with global parameters")
     parser.add_argument("--plots", action="store_true")
-    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--verbose", action="store_false")
     parser.add_argument("--self_assemble", action="store_false")
     args = parser.parse_args()
 
