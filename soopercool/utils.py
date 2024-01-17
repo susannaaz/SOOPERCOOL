@@ -195,17 +195,39 @@ def create_binning(nside, delta_ell):
     return bin_low, bin_high, bin_center
 
 
-def power_law_cl(ell, amp, delta_ell, power_law_index):
+def power_law_cl(ell, components, amp, delta_ell, power_law_index):
     """
     """
-    pl_ps = {}
-    for spec in ["TT", "TE", "TB", "EE", "EB", "BB"]:
-        if isinstance(amp, dict):
-            A = amp[spec]
-        else:
-            A = amp
-        # A is power spectrum amplitude at pivot ell == 1 - delta_ell
-        pl_ps[spec] = A / (ell + delta_ell) ** power_law_index
+    if "cmb" in components:
+        pl_ps = {}
+        for spec in ["TT", "TE", "TB", "EE", "EB", "BB"]:
+            if isinstance(amp, dict):
+                A = amp[spec]
+            else:
+                A = amp
+            # A is power spectrum amplitude at pivot ell == 1 - delta_ell
+            pl_ps[spec] = A / (ell + delta_ell) ** power_law_index
+    elif "dust" in components:
+        # SA: modified to get FG spectra
+        from .utils_foregrounds import (
+            get_default_params, fcmb)
+        params = get_default_params()
+        dl2cl = np.ones(len(ell))
+        dl2cl[1:] = 2*np.pi/(ell[1:]*(ell[1:]+1.))
+        pl_ps = {}
+        # Dust
+        A_dust_TT = params['A_d_TT'] * fcmb(params['nu0_d'])**2
+        A_dust_BB = params['A_d_BB'] * fcmb(params['nu0_d'])**2
+        A_dust_EE = params['A_d_EE'] * fcmb(params['nu0_d'])**2
+        dl_dust_bb = A_dust_BB * ((ell+1E-5) / 80.)**params['alpha_d_BB']
+        dl_dust_ee = A_dust_EE * ((ell+1E-5) / 80.)**params['alpha_d_EE']
+        dl_dust_tt = A_dust_TT * ((ell+1E-5) / 80.)**params['alpha_d_TT']
+        pl_ps["TT"] = dl_dust_tt * dl2cl
+        pl_ps["BB"] = dl_dust_bb * dl2cl
+        pl_ps["EE"] = dl_dust_ee * dl2cl
+        pl_ps["TE"] = np.zeros_like(pl_ps["EE"])
+        pl_ps["TB"] = pl_ps["TE"]
+        pl_ps["EB"] = pl_ps["TE"]
 
     return pl_ps
 
